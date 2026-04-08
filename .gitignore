@@ -1,0 +1,16 @@
+# Build outputs
+**/bin/
+**/obj/
+**/publish/
+
+# .NET
+*.user
+*.suo
+.vs/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs / temp
+*.log
