@@ -128,14 +128,15 @@ else
   echo "──────────────────────────────────────────"
   echo "  请配置 TunnelServer 启动参数"
   echo "──────────────────────────────────────────"
-  read -r -p "  认证密钥 AUTH_KEY       [直接回车随机生成]: " AUTH_KEY
+  # </dev/tty 确保在 curl|bash 管道场景下也能读取用户键盘输入
+  read -r -p "  认证密钥 AUTH_KEY       [直接回车随机生成]: " AUTH_KEY </dev/tty
   # 回车留空 → 使用随机生成的密钥
   AUTH_KEY="${AUTH_KEY:-$RANDOM_KEY}"
-  read -r -p "  控制端口 CONTROL_PORT   [6666]: " CONTROL_PORT
+  read -r -p "  控制端口 CONTROL_PORT   [6666]: " CONTROL_PORT </dev/tty
   CONTROL_PORT="${CONTROL_PORT:-6666}"
-  read -r -p "  数据端口 DATA_PORT      [6667]: " DATA_PORT
+  read -r -p "  数据端口 DATA_PORT      [6667]: " DATA_PORT </dev/tty
   DATA_PORT="${DATA_PORT:-6667}"
-  read -r -p "  公网RDP端口 PUBLIC_PORT [33890]: " PUBLIC_PORT
+  read -r -p "  公网RDP端口 PUBLIC_PORT [33890]: " PUBLIC_PORT </dev/tty
   PUBLIC_PORT="${PUBLIC_PORT:-33890}"
 
   cat > "$CONFIG_FILE" <<EOF

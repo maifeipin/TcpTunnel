@@ -33,9 +33,9 @@ info "权限检查通过 (root)"
 # ══════════════════════════════════════════════════════════════
 info "正在从 GitHub 下载源码..."
 if command -v curl &>/dev/null; then
-  curl -fsSL "$REPO_URL" -o "$WORK_DIR/repo.zip"
+  curl -fL --progress-bar "$REPO_URL" -o "$WORK_DIR/repo.zip"
 elif command -v wget &>/dev/null; then
-  wget -q "$REPO_URL" -O "$WORK_DIR/repo.zip"
+  wget --show-progress -q "$REPO_URL" -O "$WORK_DIR/repo.zip"
 else
   # 尝试安装 curl
   if [[ -f /etc/debian_version ]]; then
@@ -51,7 +51,7 @@ fi
 # ══════════════════════════════════════════════════════════════
 info "解压源码..."
 if command -v unzip &>/dev/null; then
-  unzip -q "$WORK_DIR/repo.zip" -d "$WORK_DIR"
+  unzip "$WORK_DIR/repo.zip" -d "$WORK_DIR" | tail -1
 else
   if [[ -f /etc/debian_version ]]; then
     apt-get install -y unzip -qq
@@ -71,4 +71,8 @@ info "源码就绪 → $SERVER_DIR"
 #  4. 调用标准 install.sh 完成后续安装
 # ══════════════════════════════════════════════════════════════
 chmod +x "$SERVER_DIR/install.sh"
-exec bash "$SERVER_DIR/install.sh"
+
+# 不能用 exec，否则 stdin 仍是管道；复制后以独立进程运行，stdin 恢复为终端
+cp "$SERVER_DIR/install.sh" /tmp/tunnel-install-$$.sh
+trap 'rm -rf "$WORK_DIR" /tmp/tunnel-install-$$.sh' EXIT
+exec bash /tmp/tunnel-install-$$.sh
