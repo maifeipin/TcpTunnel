@@ -16,20 +16,23 @@ using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
 int retryDelay = 2000;
-Console.WriteLine($"[Client] 服务端: {serverIp}:{controlPort} | 本地目标: {targetIp}:{targetPort}");
+Log($"[Client] 服务端: {serverIp}:{controlPort} | 本地目标: {targetIp}:{targetPort}");
 
 while (!cts.IsCancellationRequested)
 {
     try
     {
         using var ctrl = new TcpClient { NoDelay = true };
-        await ctrl.ConnectAsync(serverIp, controlPort, cts.Token);
+        // 连接超时 8s：避免因服务端暂时不可达导致每次重试等待 OS 默认 ~20s TCP 超时
+        using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        connectTimeout.CancelAfter(TimeSpan.FromSeconds(8));
+        await ctrl.ConnectAsync(serverIp, controlPort, connectTimeout.Token);
         ApplyKeepAlive(ctrl);  // 控制连接启用 KeepAlive，防止 VPS 防火墙静默断开
         var ctrlStream = ctrl.GetStream();
 
         // 发送认证
         await ctrlStream.WriteAsync(Encoding.ASCII.GetBytes(authKey + "\n"), cts.Token);
-        Console.WriteLine("[Client] 已连接服务端，等待指令...");
+        Log("[Client] 已连接服务端，等待指令...");
         retryDelay = 2000; // 连接成功后重置退避时间
 
         // 读取服务端指令
@@ -57,7 +60,7 @@ while (!cts.IsCancellationRequested)
     catch (OperationCanceledException) when (cts.IsCancellationRequested) { break; }
     catch (Exception ex)
     {
-        Console.WriteLine($"[Client] 断开 ({ex.Message})，{retryDelay / 1000}s 后重连...");
+        Log($"[Client] 断开 ({ex.Message})，{retryDelay / 1000}s 后重连...");
         await Task.Delay(retryDelay, cts.Token).ContinueWith(_ => { });
         retryDelay = Math.Min(retryDelay * 2, 30_000); // 指数退避，最长 30s
     }
@@ -83,7 +86,7 @@ async Task HandleSessionAsync(string sessionId, CancellationToken token)
         ApplyKeepAlive(localConn);
         var localStream = localConn.GetStream();
 
-        Console.WriteLine($"[Client] 转发 session {sessionId[..8]}");
+        Log($"[Client] 转发 session {sessionId[..8]}");
 
         // 双向转发；任意一端关闭则同时终止另一端
         using var sessionCts = CancellationTokenSource.CreateLinkedTokenSource(token);
@@ -93,7 +96,7 @@ async Task HandleSessionAsync(string sessionId, CancellationToken token)
         sessionCts.Cancel();
     }
     catch (OperationCanceledException) { }
-    catch (Exception ex) { Console.WriteLine($"[Client] session {sessionId[..8]} 错误: {ex.Message}"); }
+    catch (Exception ex) { Log($"[Client] session {sessionId[..8]} 错误: {ex.Message}"); }
     finally
     {
         dataConn?.Close();
@@ -111,6 +114,8 @@ static void ApplyKeepAlive(TcpClient client)
     s.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveInterval, 10); // 每 10s 一次探测
     s.SetSocketOption(SocketOptionLevel.Tcp, SocketOptionName.TcpKeepAliveRetryCount, 3);// 3 次无响应则断开
 }
+
+static void Log(string msg) => Console.WriteLine($"{DateTime.Now:HH:mm:ss} {msg}");
 
 static string Arg(string[] args, string key, string def)
 {
