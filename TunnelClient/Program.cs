@@ -60,7 +60,9 @@ while (!cts.IsCancellationRequested)
     catch (OperationCanceledException) when (cts.IsCancellationRequested) { break; }
     catch (Exception ex)
     {
-        Log($"[Client] 断开 ({ex.Message})，{retryDelay / 1000}s 后重连...");
+        // OperationCanceledException 且 cts 未取消 = 连接超时（8s），给出更明确的提示
+        var msg = ex is OperationCanceledException ? $"连接服务端超时(8s)，请确认服务端进程是否运行" : ex.Message;
+        Log($"[Client] 断开 ({msg})，{retryDelay / 1000}s 后重连...");
         await Task.Delay(retryDelay, cts.Token).ContinueWith(_ => { });
         retryDelay = Math.Min(retryDelay * 2, 30_000); // 指数退避，最长 30s
     }
