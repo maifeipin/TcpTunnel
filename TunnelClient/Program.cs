@@ -10,6 +10,7 @@ int dataPort     = ArgInt(cliArgs, "--data-port",    6667);
 string authKey   = Arg(cliArgs, "--auth-key",       "my_secure_key_123");
 string targetIp  = Arg(cliArgs, "--target-ip",      "127.0.0.1");
 int targetPort   = ArgInt(cliArgs, "--target-port",  3389);
+const int heartbeatTimeoutSec = 60; // 服务端每 25s 发 PING，若 60s 内无消息视为半开连接，强制重连
 
 using var cts = new CancellationTokenSource();
 Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
@@ -35,7 +36,10 @@ while (!cts.IsCancellationRequested)
         using var reader = new StreamReader(ctrlStream, leaveOpen: true);
         while (!cts.IsCancellationRequested)
         {
-            var line = await reader.ReadLineAsync(cts.Token);
+            // 若 heartbeatTimeoutSec 内未收到任何消息（含 PING），说明连接已半开断开，抛异常触发重连
+            using var readTimeout = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+            readTimeout.CancelAfter(TimeSpan.FromSeconds(heartbeatTimeoutSec));
+            var line = await reader.ReadLineAsync(readTimeout.Token);
             if (line == null) break; // EOF = 服务端断开
 
             if (line.StartsWith("CONNECT:", StringComparison.Ordinal))
@@ -50,7 +54,7 @@ while (!cts.IsCancellationRequested)
             }
         }
     }
-    catch (OperationCanceledException) { break; }
+    catch (OperationCanceledException) when (cts.IsCancellationRequested) { break; }
     catch (Exception ex)
     {
         Console.WriteLine($"[Client] 断开 ({ex.Message})，{retryDelay / 1000}s 后重连...");
