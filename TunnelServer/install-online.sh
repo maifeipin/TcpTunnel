@@ -72,7 +72,6 @@ info "源码就绪 → $SERVER_DIR"
 # ══════════════════════════════════════════════════════════════
 chmod +x "$SERVER_DIR/install.sh"
 
-# 不能用 exec，否则 stdin 仍是管道；复制后以独立进程运行，stdin 恢复为终端
-cp "$SERVER_DIR/install.sh" /tmp/tunnel-install-$$.sh
-trap 'rm -rf "$WORK_DIR" /tmp/tunnel-install-$$.sh' EXIT
-exec bash /tmp/tunnel-install-$$.sh
+# 直接在源码目录执行 install.sh，同时把 stdin 重定向到 /dev/tty
+# 这样 SCRIPT_DIR 能正确定位 .csproj，且 read 交互提示正常显示
+exec bash "$SERVER_DIR/install.sh" < /dev/tty
