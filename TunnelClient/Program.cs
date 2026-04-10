@@ -1,5 +1,14 @@
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
+
+// 关闭控制台"快速编辑模式"：防止用户误点黑框导致进程被系统挂起，MSTSC 无法连接
+if (OperatingSystem.IsWindows())
+{
+    var hStdin = GetStdHandle(-10);               // STD_INPUT_HANDLE
+    if (GetConsoleMode(hStdin, out uint mode))
+        SetConsoleMode(hStdin, mode & ~0x0040u);  // 清除 ENABLE_QUICK_EDIT_MODE
+}
 
 // === 配置（支持命令行参数覆盖）===
 // 用法: TunnelClient [--server 1.2.3.4] [--control-port 6666] [--data-port 6667] [--auth-key secret] [--target-port 3389]
@@ -127,3 +136,8 @@ static string Arg(string[] args, string key, string def)
 
 static int ArgInt(string[] args, string key, int def)
     => int.TryParse(Arg(args, key, null!), out var v) ? v : def;
+
+// ─── Windows 控制台 API ───────────────────────────────────────
+[DllImport("kernel32.dll")] static extern IntPtr GetStdHandle(int n);
+[DllImport("kernel32.dll")] static extern bool GetConsoleMode(IntPtr h, out uint mode);
+[DllImport("kernel32.dll")] static extern bool SetConsoleMode(IntPtr h, uint mode);
