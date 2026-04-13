@@ -136,8 +136,10 @@ else
   CONTROL_PORT="${CONTROL_PORT:-6666}"
   read -r -p "  数据端口 DATA_PORT      [6667]: " DATA_PORT </dev/tty
   DATA_PORT="${DATA_PORT:-6667}"
-  read -r -p "  公网RDP端口 PUBLIC_PORT [33890]: " PUBLIC_PORT </dev/tty
+  read -r -p "  兼容单端口 LEGACY_PUBLIC_PORT [33890]: " PUBLIC_PORT </dev/tty
   PUBLIC_PORT="${PUBLIC_PORT:-33890}"
+  read -r -p "  需要放行的公网端口 PUBLIC_PORTS (逗号分隔) [${PUBLIC_PORT}]: " PUBLIC_PORTS </dev/tty
+  PUBLIC_PORTS="${PUBLIC_PORTS:-$PUBLIC_PORT}"
 
   cat > "$CONFIG_FILE" <<EOF
 # TunnelServer 配置文件
@@ -145,7 +147,8 @@ else
 AUTH_KEY="${AUTH_KEY}"
 CONTROL_PORT="${CONTROL_PORT}"
 DATA_PORT="${DATA_PORT}"
-PUBLIC_PORT="${PUBLIC_PORT}"
+LEGACY_PUBLIC_PORT="${PUBLIC_PORT}"
+PUBLIC_PORTS="${PUBLIC_PORTS}"
 EOF
   info "配置文件已生成 → $CONFIG_FILE"
 
@@ -157,7 +160,7 @@ EOF
   echo -e "${YELLOW}│  AUTH_KEY     = ${GREEN}${AUTH_KEY}${YELLOW}│${NC}"
   echo -e "${YELLOW}│  CONTROL_PORT = ${GREEN}${CONTROL_PORT}${YELLOW}│${NC}"
   echo -e "${YELLOW}│  DATA_PORT    = ${GREEN}${DATA_PORT}${YELLOW}│${NC}"
-  echo -e "${YELLOW}│  PUBLIC_PORT  = ${GREEN}${PUBLIC_PORT}${YELLOW}│${NC}"
+  echo -e "${YELLOW}│  PUBLIC_PORTS = ${GREEN}${PUBLIC_PORTS}${YELLOW}│${NC}"
   echo -e "${YELLOW}└─────────────────────────────────────────────────┘${NC}"
   echo ""
 fi
@@ -179,7 +182,11 @@ open_port() {
 }
 open_port "$CONTROL_PORT"
 open_port "$DATA_PORT"
-open_port "$PUBLIC_PORT"
+IFS=',' read -ra _PORT_ARRAY <<< "${PUBLIC_PORTS:-${LEGACY_PUBLIC_PORT}}"
+for p in "${_PORT_ARRAY[@]}"; do
+  p_trimmed="$(echo "$p" | xargs)"
+  [[ -n "$p_trimmed" ]] && open_port "$p_trimmed"
+done
 command -v firewall-cmd &>/dev/null && systemctl is-active --quiet firewalld && firewall-cmd --reload &>/dev/null
 
 # ══════════════════════════════════════════════════════════════
@@ -200,7 +207,7 @@ ExecStart=${BINARY} \\
   --auth-key \${AUTH_KEY} \\
   --control-port \${CONTROL_PORT} \\
   --data-port \${DATA_PORT} \\
-  --public-port \${PUBLIC_PORT}
+  --public-port \${LEGACY_PUBLIC_PORT}
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
@@ -235,7 +242,7 @@ echo "  VPS 公网 IP    : $VPS_IP"
 echo "  认证密钥       : $AUTH_KEY"
 echo "  控制端口       : $CONTROL_PORT"
 echo "  数据端口       : $DATA_PORT"
-echo "  公网 RDP 端口  : $PUBLIC_PORT"
+echo "  公网端口放行   : ${PUBLIC_PORTS:-$LEGACY_PUBLIC_PORT}"
 echo ""
 echo "  常用命令:"
 echo "    查看状态  : systemctl status $SERVICE_NAME"
@@ -249,5 +256,6 @@ echo "    AUTH_KEY      = $AUTH_KEY"
 echo "    CONTROL_PORT  = $CONTROL_PORT"
 echo "    DATA_PORT     = $DATA_PORT"
 echo ""
-echo "  MSTSC 连接地址 : mstsc /v:${VPS_IP}:${PUBLIC_PORT}"
+echo "  MSTSC 示例地址 : mstsc /v:${VPS_IP}:${LEGACY_PUBLIC_PORT}"
+echo "  提示           : 其它端口映射请在客户端 tunnel-client.json 的 proxies 中配置"
 echo -e "${GREEN}══════════════════════════════════════════════════════${NC}"

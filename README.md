@@ -12,6 +12,7 @@
 - **自动重连**：指数退避（2 s → 30 s），断线即重试
 - **防掉线**：TCP KeepAlive + PING/PONG 心跳，空闲 RDP 不被防火墙杀掉
 - **多会话**：每个 RDP 连接独立数据通道，互不干扰
+- **多端口穿透**：单个服务端 + 单个客户端配置多个代理规则（RDP / SSH / HTTP(S)）
 - **一键部署**：服务端 `install.sh` 自动安装 SDK、编译、注册 systemd 服务
 - **防暴力**：认证密钥、最大并发会话限制（默认 20）
 
@@ -90,10 +91,62 @@ cd TunnelClient
 
 ---
 
-### 三、连接远程桌面
+### 三、配置多规则穿透
+
+客户端支持 `tunnel-client.json`，可同时配置多个 TCP 端口映射。
+
+示例（覆盖 RDP / SSH / Web 管理）：
+
+```json
+{
+    "server": {
+        "host": "1.2.3.4",
+        "authKey": "replace_me",
+        "controlPort": 6666,
+        "dataPort": 6667
+    },
+    "proxies": [
+        {
+            "name": "rdp-home-win",
+            "publicPort": 33890,
+            "localHost": "127.0.0.1",
+            "localPort": 3389,
+            "enabled": true
+        },
+        {
+            "name": "ssh-linux",
+            "publicPort": 2222,
+            "localHost": "192.168.1.50",
+            "localPort": 22,
+            "enabled": true
+        },
+        {
+            "name": "pve-web",
+            "publicPort": 8443,
+            "localHost": "192.168.1.2",
+            "localPort": 8006,
+            "enabled": true
+        }
+    ]
+}
+```
+
+> 提示：服务端和云安全组需要放行 `proxies[*].publicPort` 中对应端口。
+
+### 四、连接示例
 
 ```
 mstsc /v:<VPS公网IP>:33890
+```
+
+```bash
+ssh -p 2222 user@<VPS公网IP>
+```
+
+在浏览器中访问：
+
+```
+https://<VPS公网IP>:8443
 ```
 
 或在 MSTSC 地址栏填写 `<VPS公网IP>:33890`，输入内网机器的 Windows 账号密码即可。
@@ -111,7 +164,13 @@ TunnelServer [--auth-key <key>] [--control-port <port>] [--data-port <port>] [--
 **TunnelClient**
 
 ```
-TunnelClient --server <VPS_IP> [--auth-key <key>] [--control-port <port>] [--data-port <port>] [--target-ip <ip>] [--target-port <port>]
+TunnelClient --config <path-to-tunnel-client.json>
+```
+
+兼容模式（单规则）：
+
+```
+TunnelClient --server <VPS_IP> [--auth-key <key>] [--control-port <port>] [--data-port <port>] [--target-ip <ip>] [--target-port <port>] [--public-port <port>]
 ```
 
 ## 服务端管理
